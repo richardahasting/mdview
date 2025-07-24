@@ -1,0 +1,1417 @@
+#!/usr/bin/env python3
+"""
+MDView Installer - Everything you need to install MDView in one file!
+
+Just run: python3 mdview_installer.py
+
+MDView is a Python application to view Markdown files as rendered HTML in a 
+native GUI window or web browser.
+
+Created with ❤️ for the Markdown community
+"""
+
+import os
+import sys
+import subprocess
+import tempfile
+import shutil
+from pathlib import Path
+
+# ANSI color codes for pretty output
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+RED = '\033[91m'
+BLUE = '\033[94m'
+BOLD = '\033[1m'
+RESET = '\033[0m'
+
+def print_banner():
+    """Print a nice banner."""
+    banner = f"""
+{BLUE}╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║  {BOLD}███╗   ███╗██████╗ ██╗   ██╗██╗███████╗██╗    ██╗{RESET}{BLUE}         ║
+║  {BOLD}████╗ ████║██╔══██╗██║   ██║██║██╔════╝██║    ██║{RESET}{BLUE}         ║
+║  {BOLD}██╔████╔██║██║  ██║██║   ██║██║█████╗  ██║ █╗ ██║{RESET}{BLUE}         ║
+║  {BOLD}██║╚██╔╝██║██║  ██║╚██╗ ██╔╝██║██╔══╝  ██║███╗██║{RESET}{BLUE}         ║
+║  {BOLD}██║ ╚═╝ ██║██████╔╝ ╚████╔╝ ██║███████╗╚███╔███╔╝{RESET}{BLUE}         ║
+║  {BOLD}╚═╝     ╚═╝╚═════╝   ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝{RESET}{BLUE}         ║
+║                                                              ║
+║            {YELLOW}Markdown Viewer Installation Script{BLUE}               ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝{RESET}
+"""
+    print(banner)
+
+def check_python_version():
+    """Check if Python version is 3.6 or higher."""
+    if sys.version_info < (3, 6):
+        print(f"{RED}Error: Python 3.6 or higher is required.{RESET}")
+        print(f"Your version: Python {sys.version}")
+        sys.exit(1)
+
+
+def check_directory_writable(directory_path):
+    """
+    Check if a directory is writable by the current user.
+    
+    Args:
+        directory_path (Path): Path to check
+        
+    Returns:
+        bool: True if writable, False otherwise
+    """
+    try:
+        # Convert to Path object if it's a string
+        path = Path(directory_path)
+        
+        # If directory doesn't exist, check if parent is writable
+        if not path.exists():
+            parent = path.parent
+            if not parent.exists():
+                return False
+            return os.access(parent, os.W_OK)
+        
+        # If directory exists, check if it's writable
+        return os.access(path, os.W_OK)
+    except (OSError, PermissionError):
+        return False
+
+
+def find_writable_user_directory():
+    """
+    Find a writable directory for user installation.
+    
+    Returns:
+        tuple: (Path, bool) - (directory_path, needs_sudo)
+    """
+    # List of preferred directories in order of preference
+    candidates = []
+    
+    if sys.platform == "win32":
+        candidates = [
+            Path.home() / "AppData" / "Local" / "Programs" / "mdview",
+            Path.home() / "bin",
+            Path.cwd() / "mdview_install"
+        ]
+    else:
+        candidates = [
+            Path.home() / "bin", 
+            Path.home() / ".local" / "bin",
+            Path.home() / ".bin",
+            Path.cwd() / "mdview_install"
+        ]
+    
+    for candidate in candidates:
+        if check_directory_writable(candidate):
+            print(f"    {GREEN}✓ Found writable directory: {candidate}{RESET}")
+            return candidate, False
+        else:
+            print(f"    {YELLOW}⚠ Directory not writable: {candidate}{RESET}")
+    
+    # If no user directories are writable, suggest system directories
+    print(f"    {YELLOW}No user directories are writable. System installation may be needed.{RESET}")
+    if sys.platform == "win32":
+        return Path("C:/Program Files/mdview"), True
+    else:
+        # Try system directories in order of preference
+        system_candidates = [
+            Path("/usr/local/bin"),
+            Path("/opt/local/bin"),  # MacPorts
+            Path("/usr/bin"),        # System bin (last resort)
+        ]
+        
+        for sys_candidate in system_candidates:
+            if sys_candidate.exists() or check_directory_writable(sys_candidate.parent):
+                print(f"    {YELLOW}Using system directory: {sys_candidate}{RESET}")
+                return sys_candidate, True
+        
+        # Final fallback
+        print(f"    {YELLOW}Using default system directory: /usr/local/bin{RESET}")
+        return Path("/usr/local/bin"), True
+
+
+def is_pipx_available():
+    """
+    Check if pipx is available on the system.
+
+    Returns:
+        bool: True if pipx is available, False otherwise
+    """
+    # Method 1: Check if pipx is in PATH
+    if shutil.which("pipx") is not None:
+        try:
+            # Method 2: Try to run pipx --version to confirm it works
+            result = subprocess.run(
+                ["pipx", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return False
+
+    return False
+
+
+def check_pipx():
+    """Check if pipx is available."""
+    return is_pipx_available()
+
+    try:
+        subprocess.run([sys.executable, "-m", "pipx", "--version"], 
+                      capture_output=True, check=True)
+        return True
+    except:
+        
+        return False
+
+def install_dependencies():
+    """Install required dependencies."""
+    print(f"\n{YELLOW}Installing dependencies...{RESET}")
+    
+    # Check if user site-packages directory is writable
+    try:
+        import site
+        user_site = Path(site.getusersitepackages())
+        if user_site.exists() and not check_directory_writable(user_site):
+            print(f"    {YELLOW}⚠ User site-packages directory not writable: {user_site}{RESET}")
+        elif not user_site.exists():
+            # Check if parent directory is writable for creation
+            if not check_directory_writable(user_site.parent):
+                print(f"    {YELLOW}⚠ Cannot create user site-packages directory{RESET}")
+    except Exception:
+        print(f"    {YELLOW}⚠ Could not check user site-packages directory{RESET}")
+    
+    # Required dependency
+    print("  • Installing markdown library...")
+    try:
+        # Try with --user first
+        subprocess.run([sys.executable, "-m", "pip", "install", "--user", "markdown>=3.4.0"], 
+                      capture_output=True, check=True)
+        print(f"    {GREEN}✓ markdown installed{RESET}")
+    except subprocess.CalledProcessError:
+        try:
+            # If that fails, try with --break-system-packages --user
+            subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages", "--user", "markdown>=3.4.0"], 
+                          capture_output=True, check=True)
+            print(f"    {GREEN}✓ markdown installed{RESET}")
+        except subprocess.CalledProcessError as e:
+            print(f"    {RED}✗ Failed to install markdown{RESET}")
+            print(f"    Error: {e.stderr.decode() if e.stderr else 'Unknown error'}")
+            print(f"    {YELLOW}Note: You may need to install manually: pip install --user markdown{RESET}")
+            return False
+    
+    # Optional dependency
+    print("\n  • Installing pywebview (optional, for GUI mode)...")
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--user", "pywebview>=5.0"], 
+                      check=True, capture_output=True)
+        print(f"    {GREEN}✓ pywebview installed (GUI mode available){RESET}")
+    except:
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages", "--user", "pywebview>=5.0"], 
+                          check=True, capture_output=True)
+            print(f"    {GREEN}✓ pywebview installed (GUI mode available){RESET}")
+        except:
+            print(f"    {YELLOW}⚠ pywebview not installed (browser mode only){RESET}")
+    
+    return True
+
+def get_install_location(auto_install=False, install_path=None):
+    """Get the installation location from user or use automatic defaults."""
+    if auto_install:
+        # Automatic installation - find best writable directory
+        print(f"\n{YELLOW}Finding writable installation directory...{RESET}")
+        base_dir, needs_sudo = find_writable_user_directory()
+        
+        # Try to create the directory if it doesn't exist
+        try:
+            base_dir.mkdir(parents=True, exist_ok=True)
+            print(f"\n{YELLOW}Installing to directory: {base_dir}{RESET}")
+            return base_dir, needs_sudo
+        except (PermissionError, OSError) as e:
+            print(f"    {RED}✗ Cannot create directory {base_dir}: {e}{RESET}")
+            print(f"    {YELLOW}You may need to run with elevated privileges{RESET}")
+            return base_dir, True
+    
+    if install_path:
+        # Custom installation path provided
+        path = Path(install_path).expanduser()
+        
+        # Check if the custom path is writable
+        if not check_directory_writable(path):
+            print(f"    {YELLOW}Warning: {path} may not be writable{RESET}")
+            response = input(f"Continue anyway? [y/N]: ").strip().lower()
+            if response not in ['y', 'yes']:
+                print(f"    {YELLOW}Installation cancelled{RESET}")
+                sys.exit(0)
+        
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            print(f"\n{YELLOW}Installing to custom directory: {path}{RESET}")
+            return path, False
+        except (PermissionError, OSError):
+            print(f"    {RED}✗ Cannot create directory {path}{RESET}")
+            return path, True
+    
+    # Interactive mode
+    print(f"\n{YELLOW}Where would you like to install MDView?{RESET}")
+    
+    # Show what the default paths would be
+    if sys.platform == "win32":
+        user_default = Path.home() / "AppData" / "Local" / "Programs" / "mdview"
+        system_default = Path("C:/Program Files/mdview")
+    else:
+        user_default = Path.home() / ".local" / "bin"
+        # Find best system directory for display
+        system_candidates = [
+            Path("/usr/local/bin"),
+            Path("/opt/local/bin"),
+            Path("/usr/bin"),
+        ]
+        system_default = None
+        for sys_candidate in system_candidates:
+            if sys_candidate.exists():
+                system_default = sys_candidate
+                break
+        if system_default is None:
+            system_default = Path("/usr/local/bin")  # Default even if it doesn't exist
+    
+    current_default = Path.cwd()
+    
+    print(f"1. User directory (recommended): {user_default}")
+    print(f"2. System directory (requires admin/sudo): {system_default}")
+    print(f"3. Current directory: {current_default}")
+    print("4. Custom location")
+    
+    while True:
+        try:
+            choice = input("\nEnter your choice (1-4): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n{YELLOW}Using automatic directory selection...{RESET}")
+            return get_install_location(auto_install=True)
+        
+        if choice == "1":
+            # User directory - find best writable option
+            print(f"  {YELLOW}Checking writable user directories...{RESET}")
+            base_dir, needs_sudo = find_writable_user_directory()
+            
+            try:
+                base_dir.mkdir(parents=True, exist_ok=True)
+                return base_dir, needs_sudo
+            except (PermissionError, OSError):
+                print(f"    {RED}✗ Cannot create directory {base_dir}{RESET}")
+                return base_dir, True
+            
+        elif choice == "2":
+            # System directory
+            if sys.platform == "win32":
+                sys_dir = Path("C:/Program Files/mdview")
+            else:
+                # Find best system directory
+                system_candidates = [
+                    Path("/usr/local/bin"),
+                    Path("/opt/local/bin"),  # MacPorts
+                    Path("/usr/bin"),        # System bin (last resort)
+                ]
+                
+                sys_dir = None
+                for sys_candidate in system_candidates:
+                    if sys_candidate.exists() or check_directory_writable(sys_candidate.parent):
+                        sys_dir = sys_candidate
+                        break
+                
+                if sys_dir is None:
+                    sys_dir = Path("/usr/local/bin")  # Default fallback
+            
+            print(f"  {YELLOW}System installation to: {sys_dir}{RESET}")
+            if not check_directory_writable(sys_dir):
+                print(f"    {YELLOW}⚠ Requires administrator/sudo privileges{RESET}")
+                if not sys_dir.exists():
+                    print(f"    {YELLOW}⚠ Directory {sys_dir} does not exist and will be created{RESET}")
+            return sys_dir, True
+                
+        elif choice == "3":
+            # Current directory
+            current_dir = Path.cwd()
+            if check_directory_writable(current_dir):
+                print(f"    {GREEN}✓ Current directory is writable{RESET}")
+                return current_dir, False
+            else:
+                print(f"    {RED}✗ Current directory is not writable{RESET}")
+                print(f"    {YELLOW}You may need elevated privileges{RESET}")
+                return current_dir, True
+            
+        elif choice == "4":
+            # Custom location
+            try:
+                custom_path = input("Enter the installation path: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print(f"\n{YELLOW}Using automatic directory selection...{RESET}")
+                return get_install_location(auto_install=True)
+                
+            if custom_path:
+                path = Path(custom_path).expanduser()
+                
+                if check_directory_writable(path):
+                    print(f"    {GREEN}✓ Custom path is writable{RESET}")
+                    needs_sudo = False
+                else:
+                    print(f"    {YELLOW}⚠ Custom path may require elevated privileges{RESET}")
+                    needs_sudo = True
+                
+                try:
+                    path.mkdir(parents=True, exist_ok=True)
+                    return path, needs_sudo
+                except (PermissionError, OSError):
+                    return path, True
+        else:
+            print(f"{RED}Invalid choice. Please try again.{RESET}")
+
+def create_mdview_script():
+    """Return the complete mdview.py source code."""
+    return '''#!/usr/bin/env python3
+"""
+Markdown Viewer - Display markdown files as HTML in browser or GUI
+"""
+
+import argparse
+import sys
+import os
+import tempfile
+import webbrowser
+from pathlib import Path
+import markdown
+import time
+import threading
+
+# Check for PyWebView availability
+try:
+    import webview
+    PYWEBVIEW_AVAILABLE = True
+except ImportError:
+    PYWEBVIEW_AVAILABLE = False
+
+# Embedded README content
+EMBEDDED_README = """# MDView - Markdown Viewer
+
+A Python application to view Markdown files as rendered HTML in a native GUI window or web browser.
+
+## Features
+
+- View single or multiple Markdown files simultaneously
+- Native GUI window using PyWebView (when installed)
+- Fallback to web browser if GUI dependencies are not available
+- Convert Markdown files to HTML with syntax highlighting and table support
+- Multi-file support with tabs in GUI mode
+- Multi-file browser mode creates an index page with links
+- Support for common Markdown extensions (tables, code highlighting, etc.)
+- Option to keep generated HTML files or auto-delete after viewing
+
+## Installation
+
+1. Clone or download this repository
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+For GUI mode support (optional but recommended):
+
+```bash
+pip install pywebview
+```
+
+
+## Usage
+
+### View Single File
+
+#### GUI Mode (default if PyWebView is installed)
+```bash
+python mdview.py your_file.md
+```
+
+#### Browser Mode
+```bash
+python mdview.py -b your_file.md
+```
+
+### View Multiple Files
+
+#### GUI Mode with Tabs
+```bash
+python mdview.py file1.md file2.md file3.md
+```
+
+#### Browser Mode with Index Page
+```bash
+python mdview.py -b file1.md file2.md file3.md
+```
+
+## Command Line Options
+
+- `markdown_files`: Path(s) to the markdown file(s) to view (accepts multiple files)
+- `-b`, `--browser`: Force browser mode instead of GUI
+- `-k`, `--keep`: Keep the HTML file(s) instead of auto-deleting after viewing
+- `-r`, `--readme`: Display this README.md file
+- `-h`, `--help`: Show help message and exit
+
+## Examples
+
+View a single file in GUI:
+```bash
+python mdview.py README.md
+```
+
+View multiple files with tabs:
+```bash
+python mdview.py docs/*.md
+```
+
+Force browser mode:
+```bash
+python mdview.py -b README.md
+```
+
+Keep the generated HTML files:
+```bash
+python mdview.py -b -k report.md
+# Creates report.html in current directory
+```
+
+View the built-in README:
+```bash
+python mdview.py -r
+# or in browser
+python mdview.py -r -b
+```
+
+## Dependencies
+
+- **markdown**: For converting Markdown to HTML
+- **pywebview** (optional): For native GUI window display
+
+## License
+
+This project is open source and available under the MIT License.
+"""
+
+
+def convert_markdown_string_to_html(md_content, title="Markdown Document"):
+    """Convert markdown string to HTML string."""
+    # Convert markdown to HTML with extensions
+    html_content = markdown.markdown(
+        md_content,
+        extensions=['extra', 'codehilite', 'tables', 'toc']
+    )
+    
+    # Wrap in basic HTML structure with styling
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>{title}</title>
+        <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 900px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }}
+                pre {{
+                    background-color: #f4f4f4;
+                    border: 1px solid #ddd;
+                    border-radius: 3px;
+                    padding: 10px;
+                    overflow-x: auto;
+                }}
+                code {{
+                    background-color: #f4f4f4;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    font-family: Consolas, Monaco, 'Courier New', monospace;
+                }}
+                table {{
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin: 15px 0;
+                }}
+                th, td {{
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }}
+                th {{
+                    background-color: #f4f4f4;
+                    font-weight: bold;
+                }}
+                blockquote {{
+                    border-left: 4px solid #ddd;
+                    margin: 0;
+                    padding-left: 20px;
+                    color: #666;
+                }}
+                h1, h2, h3, h4, h5, h6 {{
+                    margin-top: 24px;
+                    margin-bottom: 16px;
+                }}
+                a {{
+                    color: #0366d6;
+                    text-decoration: none;
+                }}
+                a:hover {{
+                    text-decoration: underline;
+                }}
+            </style>
+        </head>
+        <body>
+            {html_content}
+        </body>
+        </html>
+        """
+    
+    return full_html
+
+
+def convert_markdown_to_html(markdown_file):
+    """Convert markdown file to HTML string."""
+    try:
+        with open(markdown_file, 'r', encoding='utf-8') as f:
+            md_content = f.read()
+        
+        return convert_markdown_string_to_html(md_content, title=Path(markdown_file).name)
+    
+    except FileNotFoundError:
+        print(f"Error: File '{markdown_file}' not found.")
+        return None
+    except Exception as e:
+        print(f"Error reading file '{markdown_file}': {e}")
+        return None
+
+
+def create_index_html(markdown_files):
+    """Create an index HTML page with links to all markdown files."""
+    html_files = []
+    for md_file in markdown_files:
+        html_name = Path(md_file).stem + '.html'
+        html_files.append((Path(md_file).name, html_name))
+    
+    links_html = '\n'.join([
+        f'<li><a href="{html_file}">{md_name}</a></li>' 
+        for md_name, html_file in html_files
+    ])
+    
+    index_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Markdown Files Index</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }}
+            h1 {{
+                color: #2c3e50;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 10px;
+            }}
+            ul {{
+                list-style-type: none;
+                padding: 0;
+            }}
+            li {{
+                margin: 10px 0;
+                padding: 10px;
+                background-color: white;
+                border-radius: 5px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            a {{
+                color: #0366d6;
+                text-decoration: none;
+                font-size: 18px;
+            }}
+            a:hover {{
+                text-decoration: underline;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>Markdown Files</h1>
+        <ul>
+            {links_html}
+        </ul>
+    </body>
+    </html>
+    """
+    
+    return index_html
+
+
+def create_multi_file_html(markdown_files):
+    """Create HTML with tabs for multiple markdown files."""
+    # Convert all files
+    file_data = []
+    for i, md_file in enumerate(markdown_files):
+        html_content = convert_markdown_to_html(md_file)
+        if html_content:
+            # Extract just the body content
+            import re
+            body_match = re.search(r'<body>(.*?)</body>', html_content, re.DOTALL)
+            if body_match:
+                body_content = body_match.group(1)
+                file_data.append({
+                    'id': f'file{i}',
+                    'name': Path(md_file).name,
+                    'content': body_content
+                })
+    
+    # Create tab buttons
+    tab_buttons = '\n'.join([
+        f'<button class="tab-button{" active" if i == 0 else ""}" onclick="showTab(\'{f["id"]}\')">{f["name"]}</button>'
+        for i, f in enumerate(file_data)
+    ])
+    
+    # Create tab contents
+    tab_contents = '\n'.join([
+        f'<div id="{f["id"]}" class="tab-content{" active" if i == 0 else ""}">{f["content"]}</div>'
+        for i, f in enumerate(file_data)
+    ])
+    
+    multi_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Markdown Viewer - {len(markdown_files)} files</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                margin: 0;
+                padding: 0;
+                background-color: #f5f5f5;
+            }}
+            .tab-bar {{
+                background-color: #2c3e50;
+                padding: 0;
+                margin: 0;
+                display: flex;
+                overflow-x: auto;
+            }}
+            .tab-button {{
+                background-color: transparent;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: background-color 0.3s;
+                white-space: nowrap;
+            }}
+            .tab-button:hover {{
+                background-color: #34495e;
+            }}
+            .tab-button.active {{
+                background-color: #3498db;
+            }}
+            .tab-content {{
+                display: none;
+                padding: 20px;
+                max-width: 900px;
+                margin: 0 auto;
+            }}
+            .tab-content.active {{
+                display: block;
+            }}
+            pre {{
+                background-color: #f4f4f4;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                padding: 10px;
+                overflow-x: auto;
+            }}
+            code {{
+                background-color: #f4f4f4;
+                padding: 2px 4px;
+                border-radius: 3px;
+                font-family: Consolas, Monaco, 'Courier New', monospace;
+            }}
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+                margin: 15px 0;
+            }}
+            th, td {{
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+            }}
+            th {{
+                background-color: #f4f4f4;
+                font-weight: bold;
+            }}
+            blockquote {{
+                border-left: 4px solid #ddd;
+                margin: 0;
+                padding-left: 20px;
+                color: #666;
+            }}
+            h1, h2, h3, h4, h5, h6 {{
+                margin-top: 24px;
+                margin-bottom: 16px;
+            }}
+            a {{
+                color: #0366d6;
+                text-decoration: none;
+            }}
+            a:hover {{
+                text-decoration: underline;
+            }}
+        </style>
+        <script>
+            function showTab(tabId) {{
+                // Hide all tabs
+                const contents = document.querySelectorAll('.tab-content');
+                contents.forEach(content => content.classList.remove('active'));
+                
+                // Remove active from all buttons
+                const buttons = document.querySelectorAll('.tab-button');
+                buttons.forEach(button => button.classList.remove('active'));
+                
+                // Show selected tab
+                document.getElementById(tabId).classList.add('active');
+                
+                // Mark button as active
+                const activeButton = Array.from(buttons).find(b => 
+                    b.onclick.toString().includes(tabId)
+                );
+                if (activeButton) activeButton.classList.add('active');
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="tab-bar">
+            {tab_buttons}
+        </div>
+        {tab_contents}
+    </body>
+    </html>
+    """
+    
+    return multi_html
+
+
+def display_in_gui(markdown_files):
+    """Display markdown files in PyWebView GUI window."""
+    if not PYWEBVIEW_AVAILABLE:
+        print("Error: PyWebView is not installed. Install it with: pip install pywebview")
+        print("Falling back to browser mode...")
+        display_in_browser(markdown_files)
+        return
+    
+    if len(markdown_files) == 1:
+        # Single file mode
+        html_content = convert_markdown_to_html(markdown_files[0])
+        if html_content is None:
+            return
+        
+        window_title = f"Markdown Viewer - {Path(markdown_files[0]).name}"
+        webview.create_window(window_title, html=html_content)
+    else:
+        # Multiple files mode with tabs
+        html_content = create_multi_file_html(markdown_files)
+        window_title = f"Markdown Viewer - {len(markdown_files)} files"
+        webview.create_window(window_title, html=html_content)
+    
+    webview.start()
+
+
+def display_in_browser(markdown_files, keep_file=False):
+    """Display multiple markdown files in the default web browser."""
+    if len(markdown_files) == 1:
+        # Single file mode
+        html_content = convert_markdown_to_html(markdown_files[0])
+        if html_content is None:
+            return
+            
+        if keep_file:
+            base_name = Path(markdown_files[0]).stem
+            html_path = Path.cwd() / f"{base_name}.html"
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            webbrowser.open(f'file://{html_path.absolute()}')
+            print(f"Opened {markdown_files[0]} in browser")
+            print(f"HTML file saved at: {html_path}")
+        else:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                f.write(html_content)
+                temp_path = f.name
+            
+            webbrowser.open(f'file://{temp_path}')
+            print(f"Opened {markdown_files[0]} in browser (temp file will be deleted)")
+            
+            def delete_temp_file():
+                time.sleep(2)
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            
+            cleanup_thread = threading.Thread(target=delete_temp_file)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+    else:
+        # Multiple files mode
+        temp_files = []
+        
+        if keep_file:
+            # Save all files to current directory
+            for md_file in markdown_files:
+                html_content = convert_markdown_to_html(md_file)
+                if html_content:
+                    base_name = Path(md_file).stem
+                    html_path = Path.cwd() / f"{base_name}.html"
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    print(f"Saved {md_file} as {html_path}")
+            
+            # Create index
+            index_html = create_index_html(markdown_files)
+            index_path = Path.cwd() / "index.html"
+            with open(index_path, 'w', encoding='utf-8') as f:
+                f.write(index_html)
+            
+            webbrowser.open(f'file://{index_path.absolute()}')
+            print(f"\nOpened index page in browser")
+            print(f"Index saved at: {index_path}")
+        else:
+            # Use temporary directory
+            temp_dir = tempfile.mkdtemp()
+            
+            # Convert all markdown files
+            for md_file in markdown_files:
+                html_content = convert_markdown_to_html(md_file)
+                if html_content:
+                    base_name = Path(md_file).stem
+                    html_path = Path(temp_dir) / f"{base_name}.html"
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(html_content)
+                    temp_files.append(html_path)
+            
+            # Create index
+            index_html = create_index_html(markdown_files)
+            index_path = Path(temp_dir) / "index.html"
+            with open(index_path, 'w', encoding='utf-8') as f:
+                f.write(index_html)
+            temp_files.append(index_path)
+            
+            webbrowser.open(f'file://{index_path.absolute()}')
+            print(f"Opened {len(markdown_files)} files in browser (temp files will be deleted)")
+            
+            # Clean up after delay
+            def delete_temp_files():
+                time.sleep(5)  # Give more time for multiple files
+                for temp_file in temp_files:
+                    try:
+                        os.unlink(temp_file)
+                    except:
+                        pass
+                try:
+                    os.rmdir(temp_dir)
+                except:
+                    pass
+            
+            cleanup_thread = threading.Thread(target=delete_temp_files)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='View markdown files as HTML in browser or GUI'
+    )
+    parser.add_argument(
+        'markdown_files',
+        nargs='*',
+        help='Path(s) to the markdown file(s) to view'
+    )
+    parser.add_argument(
+        '-b', '--browser',
+        action='store_true',
+        help='Open in browser instead of GUI (default: GUI if available)'
+    )
+    parser.add_argument(
+        '-k', '--keep',
+        action='store_true',
+        help='Keep the HTML file(s) when using browser mode (default: delete after viewing)'
+    )
+    parser.add_argument(
+        '-r', '--readme',
+        action='store_true',
+        help='Display the README.md file'
+    )
+    
+    args = parser.parse_args()
+    
+    # Collect files to display
+    files_to_display = []
+    
+    # Handle readme display
+    if args.readme:
+        # Use embedded README content
+        readme_html = convert_markdown_string_to_html(EMBEDDED_README, title="MDView README")
+        
+        if args.browser:
+            # Create a temporary file for browser display
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                f.write(readme_html)
+                temp_path = f.name
+            
+            webbrowser.open(f'file://{temp_path}')
+            print("Opened built-in README in browser")
+            
+            # Clean up after delay
+            def delete_temp_file():
+                time.sleep(2)
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            
+            cleanup_thread = threading.Thread(target=delete_temp_file)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+        else:
+            # Display in GUI
+            if PYWEBVIEW_AVAILABLE:
+                webview.create_window("MDView README", html=readme_html)
+                webview.start()
+            else:
+                # Fallback to browser if PyWebView not available
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+                    f.write(readme_html)
+                    temp_path = f.name
+                
+                webbrowser.open(f'file://{temp_path}')
+                print("Opened built-in README in browser (PyWebView not available)")
+                
+                # Clean up after delay
+                def delete_temp_file():
+                    time.sleep(2)
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                
+                cleanup_thread = threading.Thread(target=delete_temp_file)
+                cleanup_thread.daemon = True
+                cleanup_thread.start()
+        
+        # Exit after displaying README
+        sys.exit(0)
+    
+    # Add any specified markdown files
+    if args.markdown_files:
+        for md_file in args.markdown_files:
+            if os.path.exists(md_file):
+                files_to_display.append(md_file)
+            else:
+                print(f"Warning: File '{md_file}' not found, skipping.")
+    
+    # Check if any files were specified
+    if not files_to_display:
+        parser.print_help()
+        sys.exit(1)
+    
+    # Display based on option
+    if args.browser:
+        display_in_browser(files_to_display, keep_file=args.keep)
+    else:
+        display_in_gui(files_to_display)
+
+
+if __name__ == '__main__':
+    main()'''
+
+def install_mdview(install_dir, needs_sudo):
+    """Install mdview to the specified directory."""
+    print(f"\n{YELLOW}Installing MDView...{RESET}")
+    
+    # Create the mdview script
+    script_path = install_dir / "mdview"
+    
+    try:
+        # Write the script
+        with open(script_path, 'w', encoding='utf-8') as f:
+            f.write(create_mdview_script())
+        
+        # Make it executable on Unix-like systems
+        if sys.platform != "win32":
+            os.chmod(script_path, 0o755)
+        
+        print(f"{GREEN}✓ MDView installed successfully!{RESET}")
+        print(f"  Location: {script_path}")
+        
+        # Add to PATH advice
+        if install_dir not in os.environ.get('PATH', '').split(os.pathsep):
+            print(f"\n{YELLOW}Note: {install_dir} is not in your PATH.{RESET}")
+            if sys.platform == "win32":
+                print(f"To use 'mdview' from anywhere, add this to your PATH:")
+                print(f"  {install_dir}")
+            else:
+                print(f"To use 'mdview' from anywhere, add this to your ~/.bashrc or ~/.zshrc:")
+                print(f"  export PATH=\"$PATH:{install_dir}\"")
+        
+        return True
+        
+    except PermissionError:
+        print(f"{RED}✗ Permission denied. Try running with sudo/admin privileges.{RESET}")
+        return False
+    except Exception as e:
+        print(f"{RED}✗ Installation failed: {e}{RESET}")
+        return False
+
+def detect_shell():
+    """
+    Detect the user's shell and return appropriate config file.
+    
+    Returns:
+        Path: Path to shell config file, or None if not detectable
+    """
+    import pwd
+    
+    try:
+        # Get user's default shell
+        user_shell = pwd.getpwuid(os.getuid()).pw_shell
+        shell_name = Path(user_shell).name
+        
+        home = Path.home()
+        
+        # Map shells to their config files
+        shell_configs = {
+            'bash': [home / '.bashrc', home / '.bash_profile', home / '.profile'],
+            'zsh': [home / '.zshrc', home / '.zprofile'],
+            'fish': [home / '.config' / 'fish' / 'config.fish'],
+            'csh': [home / '.cshrc'],
+            'tcsh': [home / '.tcshrc', home / '.cshrc'],
+        }
+        
+        # Return first existing config file, or first option if none exist
+        if shell_name in shell_configs:
+            configs = shell_configs[shell_name]
+            for config in configs:
+                if config.exists():
+                    return config
+            # If no config exists, return the primary one
+            return configs[0]
+        
+        # Default fallback - try common files
+        common_configs = [home / '.zshrc', home / '.bashrc', home / '.profile']
+        for config in common_configs:
+            if config.exists():
+                return config
+        
+        # If nothing exists, default to .bashrc
+        return home / '.bashrc'
+        
+    except Exception:
+        # Fallback if we can't detect
+        return Path.home() / '.bashrc'
+
+
+def is_path_in_config(config_file, directory):
+    """
+    Check if a directory is already in PATH in the config file.
+    
+    Args:
+        config_file (Path): Path to shell config file
+        directory (Path): Directory to check for
+        
+    Returns:
+        bool: True if directory is already in PATH
+    """
+    if not config_file.exists():
+        return False
+    
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Look for the directory in PATH exports
+        dir_str = str(directory)
+        
+        # Common patterns for PATH modification
+        patterns = [
+            f'export PATH="$PATH:{dir_str}"',
+            f'export PATH="${{PATH}}:{dir_str}"',
+            f'export PATH=$PATH:{dir_str}',
+            f'export PATH=${{{dir_str}}}:$PATH',
+            f'PATH="$PATH:{dir_str}"',
+            f'PATH="${{PATH}}:{dir_str}"',
+            f'PATH=$PATH:{dir_str}',
+        ]
+        
+        for pattern in patterns:
+            if pattern in content:
+                return True
+        
+        # Also check if directory is literally mentioned in any PATH line
+        for line in content.split('\n'):
+            if 'PATH' in line and dir_str in line:
+                return True
+                
+        return False
+        
+    except Exception:
+        return False
+
+
+def add_to_path(config_file, directory):
+    """
+    Add directory to PATH in shell config file.
+    
+    Args:
+        config_file (Path): Path to shell config file
+        directory (Path): Directory to add to PATH
+        
+    Returns:
+        bool: True if successfully added, False otherwise
+    """
+    try:
+        # Create config file if it doesn't exist
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read existing content
+        content = ""
+        if config_file.exists():
+            with open(config_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+        
+        # Add PATH export line
+        path_line = f'\n# Added by MDView installer\nexport PATH="$PATH:{directory}"\n'
+        
+        # Append to file
+        with open(config_file, 'a', encoding='utf-8') as f:
+            f.write(path_line)
+        
+        return True
+        
+    except Exception as e:
+        print(f"    {RED}✗ Failed to update {config_file}: {e}{RESET}")
+        return False
+
+
+def update_user_path(install_dir, auto_mode=False):
+    """
+    Update user's shell configuration to include install directory in PATH.
+    
+    Args:
+        install_dir (Path): Directory that was installed to
+        auto_mode (bool): If True, don't prompt user for confirmation
+        
+    Returns:
+        bool: True if PATH was updated or already correct
+    """
+    # Skip for system directories - they should already be in PATH
+    system_dirs = [
+        Path("/usr/local/bin"),
+        Path("/opt/local/bin"), 
+        Path("/usr/bin"),
+        Path("/bin"),
+    ]
+    
+    if install_dir in system_dirs:
+        print(f"    {GREEN}✓ System directory {install_dir} should already be in PATH{RESET}")
+        return True
+    
+    # Detect shell config file
+    config_file = detect_shell()
+    if not config_file:
+        print(f"    {YELLOW}⚠ Could not detect shell configuration file{RESET}")
+        return False
+    
+    print(f"    {YELLOW}Checking PATH in {config_file}...{RESET}")
+    
+    # Check if already in PATH
+    if is_path_in_config(config_file, install_dir):
+        print(f"    {GREEN}✓ {install_dir} is already in PATH{RESET}")
+        return True
+    
+    # Ask user for permission (unless in auto mode)
+    if auto_mode:
+        response = 'y'
+        print(f"    {YELLOW}Adding {install_dir} to PATH in {config_file}...{RESET}")
+    else:
+        print(f"    {YELLOW}The installation directory {install_dir} is not in your PATH.{RESET}")
+        print(f"    {YELLOW}Add it to {config_file}? [Y/n]: {RESET}", end="")
+        
+        try:
+            response = input().strip().lower()
+            if response in ['n', 'no']:
+                print(f"    {YELLOW}Skipping PATH update. You can manually add:{RESET}")
+                print(f"    {YELLOW}export PATH=\"$PATH:{install_dir}\"{RESET}")
+                return False
+        except (EOFError, KeyboardInterrupt):
+            # Default to yes if non-interactive
+            response = 'y'
+    
+    if response in ['', 'y', 'yes']:
+        if add_to_path(config_file, install_dir):
+            print(f"    {GREEN}✓ Added {install_dir} to PATH in {config_file}{RESET}")
+            print(f"    {YELLOW}Restart your shell or run: source {config_file}{RESET}")
+            return True
+        else:
+            print(f"    {RED}✗ Failed to update PATH{RESET}")
+            return False
+    
+    return False
+
+
+def create_test_file():
+    """Create a test markdown file."""
+    test_content = """# MDView Test File
+
+This is a test file to verify your MDView installation is working correctly.
+
+## Features Test
+
+### Code Block
+```python
+def hello_mdview():
+    print("Hello from MDView!")
+```
+
+### Table
+| Feature | Status |
+|---------|--------|
+| HTML Rendering | ✓ |
+| Syntax Highlighting | ✓ |
+| Tables | ✓ |
+
+### List
+- ✓ Easy to install
+- ✓ Easy to use
+- ✓ Beautiful output
+
+**Congratulations!** If you can see this properly formatted, MDView is working! 🎉
+"""
+    
+    test_path = Path.cwd() / "mdview_test.md"
+    try:
+        with open(test_path, 'w', encoding='utf-8') as f:
+            f.write(test_content)
+        return test_path
+    except PermissionError:
+        # If we can't write to current directory, try user's home directory
+        test_path = Path.home() / "mdview_test.md"
+        with open(test_path, 'w', encoding='utf-8') as f:
+            f.write(test_content)
+        return test_path
+
+def main():
+    """Main installation process."""
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='MDView Installer - Install MDView markdown viewer',
+        epilog=f'''
+Default installation locations:
+  Auto mode will try (in order):
+    • ~/.local/bin (Unix/macOS) or ~/AppData/Local/Programs/mdview (Windows)
+    • ~/bin
+    • ~/.bin (Unix/macOS only)
+    • ./mdview_install (current directory)
+  
+  System installation (option 2) will try:
+    • /usr/local/bin (if exists)
+    • /opt/local/bin (MacPorts, if exists)
+    • /usr/bin (last resort)
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument('--auto', '-a', action='store_true', 
+                       help='Automatic installation to first writable user directory (no prompts)')
+    parser.add_argument('--path', '-p', type=str, 
+                       help='Custom installation path')
+    parser.add_argument('--no-deps', action='store_true',
+                       help='Skip dependency installation')
+    parser.add_argument('--no-path-update', action='store_true',
+                       help='Skip updating PATH in shell configuration')
+    
+    args = parser.parse_args()
+    
+    print_banner()
+    
+    # Check Python version
+    check_python_version()
+    
+    print(f"{GREEN}✓ Python {sys.version.split()[0]} detected{RESET}")
+    
+    # Install dependencies (unless skipped)
+    if not args.no_deps:
+        if not install_dependencies():
+            print(f"\n{RED}Failed to install dependencies. Exiting.{RESET}")
+            sys.exit(1)
+    else:
+        print(f"{YELLOW}Skipping dependency installation...{RESET}")
+    
+    # Get install location
+    install_dir, needs_sudo = get_install_location(auto_install=args.auto, install_path=args.path)
+    
+    # Install MDView
+    if install_mdview(install_dir, needs_sudo):
+        print(f"\n{GREEN}{'='*60}{RESET}")
+        print(f"{GREEN}Installation complete!{RESET}")
+        
+        # Update PATH in shell configuration
+        path_updated = False
+        if not args.no_path_update:
+            print(f"\n{YELLOW}Updating shell configuration...{RESET}")
+            path_updated = update_user_path(install_dir, auto_mode=args.auto)
+        else:
+            print(f"\n{YELLOW}Skipping PATH update (--no-path-update specified){RESET}")
+        
+        print(f"\n{YELLOW}Quick test:{RESET}")
+        
+        # Create test file
+        test_file = create_test_file()
+        print(f"Created test file: {test_file}")
+        
+        # Show how to run
+        if path_updated or install_dir in os.environ.get('PATH', '').split(os.pathsep):
+            print(f"\nTry running: {BOLD}mdview mdview_test.md{RESET}")
+            print(f"Or view the docs: {BOLD}mdview -r{RESET}")
+            if path_updated:
+                print(f"{YELLOW}Note: You may need to restart your shell or run 'source ~/.zshrc' (or ~/.bashrc){RESET}")
+        else:
+            mdview_path = install_dir / "mdview"
+            print(f"\nTry running: {BOLD}{mdview_path} mdview_test.md{RESET}")
+            print(f"Or view the docs: {BOLD}{mdview_path} -r{RESET}")
+            print(f"\n{YELLOW}To add to PATH manually, add this to your shell config:{RESET}")
+            print(f"{YELLOW}export PATH=\"$PATH:{install_dir}\"{RESET}")
+        
+        print(f"\n{BLUE}Thank you for installing MDView! ❤️{RESET}")
+    else:
+        print(f"\n{RED}Installation failed. Please try again.{RESET}")
+
+if __name__ == "__main__":
+    main()
