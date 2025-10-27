@@ -11,7 +11,7 @@ import webbrowser
 from pathlib import Path
 import markdown
 import time
-import threading
+import subprocess
 
 # Check for PyWebView availability
 try:
@@ -25,6 +25,85 @@ except ImportError:
 # Default is 30 seconds to ensure browsers have time to fully load files
 DEFAULT_CLEANUP_DELAY = 30
 CLEANUP_DELAY = int(os.environ.get('MDVIEW_CLEANUP_DELAY', DEFAULT_CLEANUP_DELAY))
+
+
+def cleanup_file_in_background(file_path, delay=CLEANUP_DELAY):
+    """
+    Schedule a file for deletion in a background process.
+
+    This creates a completely independent subprocess that continues running
+    even after the main process exits. Unlike daemon threads (which are killed
+    when the main process exits), this subprocess is truly independent.
+
+    In C terms: This is like fork() + exec() to create a child process
+    In Java terms: Like ProcessBuilder with inheritIO(false)
+
+    Args:
+        file_path: Path to file to delete
+        delay: Seconds to wait before deletion
+    """
+    cleanup_script = f'''
+import time
+import os
+import sys
+
+try:
+    time.sleep({delay})
+    os.unlink("{file_path}")
+except Exception:
+    pass  # Silent cleanup - file might already be deleted
+'''
+
+    # Spawn completely independent background process
+    # - stdout/stderr redirected to /dev/null (no output)
+    # - start_new_session=True makes it independent (Unix: new process group)
+    # - Process continues even after parent exits
+    subprocess.Popen(
+        [sys.executable, '-c', cleanup_script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True  # Detach from parent (like daemon() in C)
+    )
+
+
+def cleanup_directory_in_background(file_paths, directory, delay=CLEANUP_DELAY):
+    """
+    Schedule multiple files and a directory for deletion in a background process.
+
+    Args:
+        file_paths: List of file paths to delete
+        directory: Directory path to remove after files are deleted
+        delay: Seconds to wait before deletion
+    """
+    # Build list of files as Python list literal
+    files_str = '[' + ', '.join(f'"{f}"' for f in file_paths) + ']'
+
+    cleanup_script = f'''
+import time
+import os
+import sys
+
+try:
+    time.sleep({delay})
+    for file_path in {files_str}:
+        try:
+            os.unlink(file_path)
+        except:
+            pass
+    try:
+        os.rmdir("{directory}")
+    except:
+        pass
+except Exception:
+    pass  # Silent cleanup
+'''
+
+    subprocess.Popen(
+        [sys.executable, '-c', cleanup_script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True
+    )
 
 # Embedded README content
 EMBEDDED_README = """# MDView - Markdown Viewer
@@ -511,16 +590,8 @@ def display_in_browser(markdown_files, keep_file=False):
             webbrowser.open(f'file://{temp_path}')
             print(f"Opened {markdown_files[0]} in browser (temp file will be deleted after {CLEANUP_DELAY}s)")
 
-            def delete_temp_file():
-                time.sleep(CLEANUP_DELAY)
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
-            
-            cleanup_thread = threading.Thread(target=delete_temp_file)
-            cleanup_thread.daemon = True
-            cleanup_thread.start()
+            # Schedule cleanup in independent background process
+            cleanup_file_in_background(temp_path)
     else:
         # Multiple files mode
         temp_files = []
@@ -569,22 +640,8 @@ def display_in_browser(markdown_files, keep_file=False):
             webbrowser.open(f'file://{index_path.absolute()}')
             print(f"Opened {len(markdown_files)} files in browser (temp files will be deleted after {CLEANUP_DELAY}s)")
 
-            # Clean up after delay
-            def delete_temp_files():
-                time.sleep(CLEANUP_DELAY)
-                for temp_file in temp_files:
-                    try:
-                        os.unlink(temp_file)
-                    except:
-                        pass
-                try:
-                    os.rmdir(temp_dir)
-                except:
-                    pass
-            
-            cleanup_thread = threading.Thread(target=delete_temp_files)
-            cleanup_thread.daemon = True
-            cleanup_thread.start()
+            # Schedule cleanup in independent background process
+            cleanup_directory_in_background(temp_files, temp_dir)
 
 
 def main():
@@ -631,17 +688,8 @@ def main():
             webbrowser.open(f'file://{temp_path}')
             print(f"Opened built-in README in browser (temp file will be deleted after {CLEANUP_DELAY}s)")
 
-            # Clean up after delay
-            def delete_temp_file():
-                time.sleep(CLEANUP_DELAY)
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
-
-            cleanup_thread = threading.Thread(target=delete_temp_file)
-            cleanup_thread.daemon = True
-            cleanup_thread.start()
+            # Schedule cleanup in independent background process
+            cleanup_file_in_background(temp_path)
         else:
             # Display in GUI
             if PYWEBVIEW_AVAILABLE:
@@ -656,17 +704,8 @@ def main():
                 webbrowser.open(f'file://{temp_path}')
                 print(f"Opened built-in README in browser (PyWebView not available, temp file will be deleted after {CLEANUP_DELAY}s)")
 
-                # Clean up after delay
-                def delete_temp_file():
-                    time.sleep(CLEANUP_DELAY)
-                    try:
-                        os.unlink(temp_path)
-                    except:
-                        pass
-
-                cleanup_thread = threading.Thread(target=delete_temp_file)
-                cleanup_thread.daemon = True
-                cleanup_thread.start()
+                # Schedule cleanup in independent background process
+                cleanup_file_in_background(temp_path)
         
         # Exit after displaying README
         sys.exit(0)
