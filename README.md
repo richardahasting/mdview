@@ -83,6 +83,17 @@ python mdview.py -b file1.md file2.md file3.md
 - `-r`, `--readme`: Display this README.md file
 - `-h`, `--help`: Show help message and exit
 
+## Environment Variables
+
+- `MDVIEW_CLEANUP_DELAY`: Time in seconds to wait before deleting temporary HTML files in browser mode (default: 30).
+  Increase this if you experience issues with files being deleted before your browser can load them.
+
+  ```bash
+  # Example: Wait 60 seconds before cleanup
+  export MDVIEW_CLEANUP_DELAY=60
+  mdview -b README.md
+  ```
+
 ## Examples
 
 View a single file in GUI:
