@@ -50,7 +50,20 @@ python mdview.py -b -k report.md
 
 # View embedded README
 python mdview.py -r
+
+# Configure temp file cleanup delay (in seconds, default is 30)
+MDVIEW_CLEANUP_DELAY=60 python mdview.py -b <markdown_file>
 ```
+
+### Environment Variables
+
+- `MDVIEW_CLEANUP_DELAY`: Time in seconds to wait before deleting temporary HTML files in browser mode (default: 30).
+  Increase this if you experience issues with files being deleted before your browser can load them, or if you need more time to view the content.
+  ```bash
+  # Example: Wait 60 seconds before cleanup
+  export MDVIEW_CLEANUP_DELAY=60
+  python mdview.py -b README.md
+  ```
 
 ### Testing
 No formal test suite exists. Test manually using:
