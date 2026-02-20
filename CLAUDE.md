@@ -158,7 +158,7 @@ The application embeds GitHub-style CSS directly in generated HTML:
 
 - Browser is the default mode; `-g/--gui` opts into PyWebView (falls back to browser if not installed)
 - No automated tests exist - all testing is manual
-- License inconsistency: setup.py says MIT but LICENSE file is Apache 2.0
+- License: Apache 2.0 (LICENSE file and all references)
 - The entire README is embedded in the script for the `-r` flag functionality
 
 ## Building the Installer

@@ -16,5 +16,4 @@ All planned features have been implemented. The project is stable.
 ## Potential Future Work
 
 - Automated test suite (currently manual testing only)
-- Resolve license inconsistency (setup.py says MIT, LICENSE file is Apache 2.0)
 - Version number in the script itself (for `mdview -h` version reporting)
