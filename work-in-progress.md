@@ -1,21 +1,20 @@
 # Work in Progress
 
-## Current Task: Add Installation Location Prompt
+## Status: No Active Tasks
 
-### Objective
-Simplify the installation flow by asking the user upfront where they want to install mdview, rather than using complex location detection.
+All planned features have been implemented. The project is stable.
 
-### Plan
-1. Modify get_install_location function to be simpler and more direct
-2. Move installation location selection earlier in the process
-3. Update existing installation check to consider the target location
-4. Simplify the overall installation flow
-5. Test the streamlined installation process
+## Completed Tasks (in order)
 
-### Previous Tasks Completed
-- Created build process for mdview_installer.py regeneration
+- Created build process for `mdview_installer.py` regeneration
 - Enhanced installer for pipx support and package manager detection
 - Added comprehensive existing installation detection
+- Added upfront installation location prompt
+- Fixed temp file cleanup: replaced daemon threads with detached subprocess (30s delay, survives parent exit)
+- Switched default display mode to system browser; added `-g/--gui` flag for PyWebView
 
-### Status
-- Starting implementation of upfront location selection
+## Potential Future Work
+
+- Automated test suite (currently manual testing only)
+- Resolve license inconsistency (setup.py says MIT, LICENSE file is Apache 2.0)
+- Version number in the script itself (for `mdview -h` version reporting)
