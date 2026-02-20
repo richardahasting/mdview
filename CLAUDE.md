@@ -36,23 +36,23 @@ python install.py [--system] [--with-gui]
 
 ### Running the Application
 ```bash
-# View single file in GUI mode (default)
+# View single file in browser (default)
 python mdview.py <markdown_file>
 
-# View in browser mode
-python mdview.py -b <markdown_file>
+# View in native GUI window (requires pywebview)
+python mdview.py -g <markdown_file>
 
-# View multiple files (creates tabs in GUI, index in browser)
+# View multiple files (index in browser, tabs in GUI)
 python mdview.py file1.md file2.md file3.md
 
-# Keep generated HTML files (browser mode)
-python mdview.py -b -k report.md
+# Keep generated HTML files
+python mdview.py -k report.md
 
 # View embedded README
 python mdview.py -r
 
 # Configure temp file cleanup delay (in seconds, default is 30)
-MDVIEW_CLEANUP_DELAY=60 python mdview.py -b <markdown_file>
+MDVIEW_CLEANUP_DELAY=60 python mdview.py <markdown_file>
 ```
 
 ### Environment Variables
@@ -68,24 +68,24 @@ MDVIEW_CLEANUP_DELAY=60 python mdview.py -b <markdown_file>
 ### Testing
 No formal test suite exists. Test manually using:
 ```bash
-# Test GUI mode
+# Test browser mode (default)
 python mdview.py README.md
 
-# Test browser mode
-python mdview.py -b README.md
+# Test GUI mode
+python mdview.py -g README.md
 
 # Test multi-file support
 python mdview.py README.md INSTALLER_README.md
 
-# Test fallback behavior (when PyWebView not installed)
+# Test GUI fallback (when PyWebView not installed)
 pip uninstall pywebview
-python mdview.py README.md  # Should open in browser
+python mdview.py -g README.md  # Should fall back to browser
 ```
 
 ## Architecture
 
 ### Single-File Design
-All functionality is contained in `mdview.py` (677 lines) with these key components:
+All functionality is contained in `mdview.py` (~740 lines) with these key components:
 
 - **convert_markdown_string_to_html()**: Core conversion with GitHub-style CSS
 - **convert_markdown_to_html()**: File-based wrapper for single files
@@ -96,10 +96,11 @@ All functionality is contained in `mdview.py` (677 lines) with these key compone
 - **main()**: CLI argument parsing and mode selection
 
 ### Key Design Patterns
-- **Graceful Degradation**: Automatically falls back to browser if PyWebView unavailable
-- **Temporary File Management**: Auto-cleanup using threading (30-second delay)
+- **Browser-First Default**: System browser requires no extra dependencies
+- **Opt-In GUI**: `-g/--gui` enables PyWebView; falls back to browser if not installed
+- **Subprocess Cleanup**: Temp files deleted via detached subprocess (survives parent exit, 30s default)
 - **Embedded Documentation**: README content included in script for `-r` flag
-- **Multi-Mode Support**: Both GUI (native window) and browser rendering
+- **Multi-Mode Support**: Both browser (index page) and GUI (tabs) for multiple files
 
 ### Markdown Extensions Used
 - `extra`: Additional markdown features
@@ -150,11 +151,12 @@ The application embeds GitHub-style CSS directly in generated HTML:
 ### Temporary File Handling
 - Browser mode creates temporary HTML files in system temp directory
 - Files auto-delete after 30 seconds unless `-k/--keep` flag used
-- Cleanup handled in separate thread to avoid blocking
+- Cleanup handled by a detached subprocess (`subprocess.Popen` with `start_new_session=True`) — survives parent process exit, unlike daemon threads
+- Delay configurable via `MDVIEW_CLEANUP_DELAY` environment variable
 
 ## Important Notes
 
-- The GUI mode requires PyWebView but gracefully falls back to browser mode
+- Browser is the default mode; `-g/--gui` opts into PyWebView (falls back to browser if not installed)
 - No automated tests exist - all testing is manual
 - License inconsistency: setup.py says MIT but LICENSE file is Apache 2.0
 - The entire README is embedded in the script for the `-r` flag functionality

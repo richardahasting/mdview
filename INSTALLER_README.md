@@ -24,10 +24,10 @@ That's it! The installer will:
 
 **MDView** is a powerful yet simple Markdown viewer that:
 
-- 🖥️ **Native GUI** - Beautiful native windows using PyWebView
-- 🌐 **Browser Mode** - Fallback to your default web browser
+- 🌐 **Browser Mode** - Opens in your default web browser (no extra dependencies)
+- 🖥️ **Native GUI** - Optional native windows using PyWebView (`-g/--gui`)
 - 📄 **Single Files** - View individual markdown documents
-- 📚 **Multiple Files** - Tabbed interface for multiple documents
+- 📚 **Multiple Files** - Index page (browser) or tabbed interface (GUI)
 - 🎨 **Beautiful Styling** - GitHub-like rendering with syntax highlighting
 - ⚡ **Fast & Lightweight** - Minimal dependencies, maximum performance
 
@@ -36,20 +36,20 @@ That's it! The installer will:
 After installation:
 
 ```bash
-# View a single file
+# View a single file (opens in browser by default)
 mdview README.md
 
-# View multiple files with tabs
+# View multiple files (browser index page)
 mdview docs/*.md
 
-# Force browser mode
-mdview -b presentation.md
+# Open in native GUI window (requires pywebview)
+mdview -g presentation.md
 
 # View built-in help
 mdview -r
 
 # Keep HTML files instead of auto-deleting
-mdview -k -b report.md
+mdview -k report.md
 ```
 
 ## 🛠️ Installation Options
@@ -112,17 +112,17 @@ The installer will automatically detect and use pipx if pip fails.
 
 ## 🎨 Features
 
-### GUI Mode (with pywebview)
+### Browser Mode (default)
+- Opens in your default web browser — no extra dependencies
+- Index page for multiple files
+- Temporary or permanent HTML file generation
+- Beautiful GitHub-like styling
+
+### GUI Mode (with `-g/--gui`, requires pywebview)
 - Native application window
 - Tabbed interface for multiple files
 - Full HTML rendering with CSS styling
 - Syntax highlighting for code blocks
-
-### Browser Mode (fallback)
-- Opens in your default web browser
-- Index page for multiple files
-- Temporary or permanent HTML file generation
-- Same beautiful styling as GUI mode
 
 ## 🚚 Sharing MDView
 
