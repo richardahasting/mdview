@@ -113,8 +113,8 @@ A Python application to view Markdown files as rendered HTML in a native GUI win
 ## Features
 
 - View single or multiple Markdown files simultaneously
-- Native GUI window using PyWebView (when installed)
-- Fallback to web browser if GUI dependencies are not available
+- Opens in system browser by default (no extra dependencies needed)
+- Native GUI window using PyWebView via -g/--gui flag (optional)
 - Convert Markdown files to HTML with syntax highlighting and table support
 - Multi-file support with tabs in GUI mode
 - Multi-file browser mode creates an index page with links
@@ -141,32 +141,32 @@ pip install pywebview
 
 ### View Single File
 
-#### GUI Mode (default if PyWebView is installed)
+#### Browser Mode (default)
 ```bash
 python mdview.py your_file.md
 ```
 
-#### Browser Mode
+#### GUI Mode (requires pywebview)
 ```bash
-python mdview.py -b your_file.md
+python mdview.py -g your_file.md
 ```
 
 ### View Multiple Files
 
-#### GUI Mode with Tabs
+#### Browser Mode with Index Page
 ```bash
 python mdview.py file1.md file2.md file3.md
 ```
 
-#### Browser Mode with Index Page
+#### GUI Mode with Tabs
 ```bash
-python mdview.py -b file1.md file2.md file3.md
+python mdview.py -g file1.md file2.md file3.md
 ```
 
 ## Command Line Options
 
 - `markdown_files`: Path(s) to the markdown file(s) to view (accepts multiple files)
-- `-b`, `--browser`: Force browser mode instead of GUI
+- `-g`, `--gui`: Open in native GUI window using PyWebView (requires pywebview)
 - `-k`, `--keep`: Keep the HTML file(s) instead of auto-deleting after viewing
 - `-r`, `--readme`: Display this README.md file
 - `-h`, `--help`: Show help message and exit
@@ -179,37 +179,37 @@ python mdview.py -b file1.md file2.md file3.md
   ```bash
   # Example: Wait 60 seconds before cleanup
   export MDVIEW_CLEANUP_DELAY=60
-  mdview -b README.md
+  mdview README.md
   ```
 
 ## Examples
 
-View a single file in GUI:
+View a single file in browser (default):
 ```bash
 python mdview.py README.md
 ```
 
-View multiple files with tabs:
+View multiple files with an index page:
 ```bash
 python mdview.py docs/*.md
 ```
 
-Force browser mode:
+Open in native GUI window:
 ```bash
-python mdview.py -b README.md
+python mdview.py -g README.md
 ```
 
 Keep the generated HTML files:
 ```bash
-python mdview.py -b -k report.md
+python mdview.py -k report.md
 # Creates report.html in current directory
 ```
 
 View the built-in README:
 ```bash
 python mdview.py -r
-# or in browser
-python mdview.py -r -b
+# or in GUI window
+python mdview.py -r -g
 ```
 
 ## Dependencies
@@ -654,9 +654,14 @@ def main():
         help='Path(s) to the markdown file(s) to view'
     )
     parser.add_argument(
+        '-g', '--gui',
+        action='store_true',
+        help='Open in native GUI window using PyWebView (requires pywebview)'
+    )
+    parser.add_argument(
         '-b', '--browser',
         action='store_true',
-        help='Open in browser instead of GUI (default: GUI if available)'
+        help='Open in browser (default behavior, kept for compatibility)'
     )
     parser.add_argument(
         '-k', '--keep',
@@ -678,35 +683,25 @@ def main():
     if args.readme:
         # Use embedded README content
         readme_html = convert_markdown_string_to_html(EMBEDDED_README, title="MDView README")
-        
-        if args.browser:
-            # Create a temporary file for browser display
+
+        if args.gui and PYWEBVIEW_AVAILABLE:
+            # Display in native GUI window
+            webview.create_window("MDView README", html=readme_html)
+            webview.start()
+        else:
+            if args.gui and not PYWEBVIEW_AVAILABLE:
+                print("PyWebView not available, falling back to browser mode.")
+            # Display in browser (default)
             with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
                 f.write(readme_html)
                 temp_path = f.name
-            
+
             webbrowser.open(f'file://{temp_path}')
             print(f"Opened built-in README in browser (temp file will be deleted after {CLEANUP_DELAY}s)")
 
             # Schedule cleanup in independent background process
             cleanup_file_in_background(temp_path)
-        else:
-            # Display in GUI
-            if PYWEBVIEW_AVAILABLE:
-                webview.create_window("MDView README", html=readme_html)
-                webview.start()
-            else:
-                # Fallback to browser if PyWebView not available
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
-                    f.write(readme_html)
-                    temp_path = f.name
-                
-                webbrowser.open(f'file://{temp_path}')
-                print(f"Opened built-in README in browser (PyWebView not available, temp file will be deleted after {CLEANUP_DELAY}s)")
 
-                # Schedule cleanup in independent background process
-                cleanup_file_in_background(temp_path)
-        
         # Exit after displaying README
         sys.exit(0)
     
@@ -724,10 +719,10 @@ def main():
         sys.exit(1)
     
     # Display based on option
-    if args.browser:
-        display_in_browser(files_to_display, keep_file=args.keep)
-    else:
+    if args.gui:
         display_in_gui(files_to_display)
+    else:
+        display_in_browser(files_to_display, keep_file=args.keep)
 
 
 if __name__ == '__main__':

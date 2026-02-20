@@ -286,3 +286,31 @@ Follow-up: "Make sure to present a default directory that already exists."
 
 ### Session Complete
 Installer now asks users upfront where they want to install mdview, with clear options and streamlined conflict resolution.
+
+## Session: Switch Default to Browser Mode, Add --gui Flag
+
+### Date: 2026-02-20
+
+### User Request
+Switch the default display mode from PyWebView GUI to system browser. Add a `-g/--gui` flag to opt into PyWebView mode.
+
+### Changes Made
+
+1. **Swapped default behavior**: Browser is now the default; no flag required
+2. **Added `-g/--gui` flag**: Opts into native PyWebView window
+3. **Kept `-b/--browser` flag**: Retained for backward compatibility (no-op since browser is now default)
+4. **Updated `-r/--readme` logic**: Now opens in browser by default; use `-g` for GUI window
+5. **Updated EMBEDDED_README**: Help text and examples updated to reflect new flags
+6. **Preserved subprocess cleanup**: Merged cleanly with the subprocess-based cleanup improvements from the previous session
+
+### Files Modified
+- `mdview.py` (merged with subprocess cleanup improvements)
+- `mdview_installer.py` (regenerated)
+- `developer-log.md`
+
+### Notes
+- Two installs exist: `~/.local/bin/mdview` (priority in PATH) and `~/bin/mdview` — both kept in sync
+- The build verification warning ("Could not verify embedding") is a pre-existing bug in build_installer.py
+
+### Session Complete
+Browser is now the default mode. PyWebView available as opt-in via `-g/--gui`.
