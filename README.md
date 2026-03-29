@@ -21,7 +21,7 @@ Download and run the self-contained installer:
 
 ```bash
 # Download the installer
-curl -O https://raw.githubusercontent.com/your-repo/mdview/main/mdview_installer.py
+curl -O https://raw.githubusercontent.com/richardahasting/mdview/main/mdview_installer.py
 
 # Run the installer
 python3 mdview_installer.py
